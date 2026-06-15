@@ -143,12 +143,12 @@
             <div class="stat-card"><div class="number">{{ stats.errors }}</div><div class="label">Errors</div></div>
         </div>
 
-        {% set has_files = false %}
+        {% set ns = namespace(has_files=false) %}
         {% for cat, items in files.items() %}
-            {% if items %}{% set has_files = true %}{% endif %}
+            {% if items %}{% set ns.has_files = true %}{% endif %}
         {% endfor %}
 
-        {% if has_files %}
+        {% if ns.has_files %}
         <h2>Files Found</h2>
         <div class="file-section">
             {% for category, items in files.items() %}

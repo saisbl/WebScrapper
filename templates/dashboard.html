@@ -78,9 +78,9 @@ a.btn{text-decoration:none}
 <div class=card id=progressArea>
 <div class=stats-grid>
 <div class=stat><div class=val id=sPages>0</div><div class=lbl>Pages</div></div>
-<div class=stat><div class=val id=sFiles>0</div><div class=lbl>Files</div></div>
-<div class=stat><div class=val id=sFound>0</div><div class=lbl>Discovered</div></div>
-<div class=stat><div class=val id=sErrors>0</div><div class=lbl>Errors</div></div>
+<div class=stat><div class=val id=sFiles>0</div><div class=lbl>Discovered</div></div>
+<div class=stat><div class=val id=sDl>0</div><div class=lbl>Downloaded</div></div>
+<div class=stat><div class=val id=sFails>0</div><div class=lbl>Failed</div></div>
 </div>
 <div class=bar-track><div class=bar-fill id=barFill></div></div>
 <div class=log-box id=logBox></div>
@@ -133,7 +133,7 @@ async function startScrape(){
 }
 
 function resetStats(){
-  ['sPages','sFiles','sFound','sErrors'].forEach(id=>document.getElementById(id).textContent='0')
+  ['sPages','sFiles','sDl','sFails'].forEach(id=>document.getElementById(id).textContent='0')
   document.getElementById('barFill').style.width='0'
 }
 
@@ -142,14 +142,14 @@ function pollStatus(){
   fetch('/status/'+tid).then(r=>r.json()).then(d=>{
     document.getElementById('sPages').textContent=d.pages_scraped
     document.getElementById('sFiles').textContent=d.files_found
-    document.getElementById('sFound').textContent=d.discovered
-    document.getElementById('sErrors').textContent=d.errors
+    document.getElementById('sDl').textContent=d.files_downloaded
+    document.getElementById('sFails').textContent=d.files_failed
 
     const log=document.getElementById('logBox')
     d.log.forEach(line=>{
       if(!log.querySelector(`[data-idx="${d.log.indexOf(line)}"]`)){
         const el=document.createElement('div')
-        el.className='log-entry '+(line.startsWith('Error')?'log-error':line.startsWith('Scraped')?'log-scraped':'log-info')
+        el.className='log-entry '+(line.startsWith('Error')||line.includes('failed')?'log-error':line.startsWith('Scraped')?'log-scraped':'log-info')
         el.textContent=line
         log.appendChild(el)
         log.scrollTop=log.scrollHeight
@@ -165,11 +165,14 @@ function pollStatus(){
       return
     }
     if(d.status==='extracting'){
-      document.getElementById('barFill').style.width='80%'
+      document.getElementById('barFill').style.width='50%'
+    }else if(d.status==='downloading'){
+      const pct=d.total_files>0?Math.round(d.files_downloaded/d.total_files*85):50
+      document.getElementById('barFill').style.width=Math.min(85,pct)+'%'
     }else if(d.status==='generating'){
       document.getElementById('barFill').style.width='95%'
     }else{
-      const pct=Math.min(70,Math.round(d.pages_scraped/(d.pages_scraped+1)*70))
+      const pct=Math.min(45,Math.round(d.pages_scraped/(d.pages_scraped+1)*45))
       document.getElementById('barFill').style.width=pct+'%'
     }
     pollTimer=setTimeout(pollStatus,1500)
@@ -184,9 +187,10 @@ async function loadResults(tid){
     document.getElementById('jsonBtn').href='/download/'+tid+'/json'
     document.getElementById('htmlBtn').href='/download/'+tid+'/html'
     document.getElementById('viewBtn').href='/report/'+tid
-    const total=rep.scrape_info.files_found
+    const st=await fetch('/status/'+tid).then(r=>r.json())
+    const dl=st.files_downloaded||0
     const btn=document.getElementById('zipBtn')
-    if(total>0){btn.textContent='Download All ('+total+')';btn.disabled=false}
+    if(dl>0){btn.textContent='Download All ('+dl+')';btn.disabled=false}
     else{btn.textContent='No Files';btn.disabled=true}
   }catch(e){}
 }

@@ -1,12 +1,11 @@
 import asyncio
+import io
 import json
 import threading
 import uuid
-import requests
 import zipfile
-import io
 import os
-from urllib.parse import urlparse
+from pathlib import Path
 from flask import Flask, render_template, request, jsonify, send_file
 from scraper.crawler import Crawler
 from scraper.extractor import Extractor
@@ -14,6 +13,7 @@ from scraper.organizer import Organizer
 
 app = Flask(__name__)
 tasks = {}
+BASE_DIR = Path(__file__).parent
 
 
 def run_scrape(task_id, url):
@@ -31,8 +31,13 @@ async def _scrape_task(task_id, url):
     task["pages_scraped"] = 0
     task["files_found"] = 0
     task["errors"] = 0
+    task["files_downloaded"] = 0
+    task["files_failed"] = 0
 
-    crawler = Crawler(url)
+    files_dir = BASE_DIR / "output" / task_id / "files"
+    files_dir.mkdir(parents=True, exist_ok=True)
+
+    crawler = Crawler(url, files_dir=str(files_dir))
 
     def progress(**kwargs):
         t = kwargs.get("type", "")
@@ -67,15 +72,20 @@ async def _scrape_task(task_id, url):
 
     organizer = Organizer()
     report = organizer.build_report(result, extracted_pages, url)
+
+    task["total_files"] = result["stats"]["files_found"]
+    task["files_downloaded"] = result["stats"]["files_downloaded"]
+    task["files_failed"] = task["total_files"] - task["files_downloaded"]
+
     json_path = organizer.save_json(report)
     html_path = organizer.save_html(report)
 
+    task["files_dir"] = str(files_dir)
     task["report"] = report
     task["json_path"] = json_path
     task["html_path"] = html_path
-    task["total_files"] = sum(len(v) for v in report.get("files", {}).values())
     task["status"] = "done"
-    task["log"].append("Complete!")
+    task["log"].append(f"Complete! {task['files_downloaded']} files downloaded, {task['files_failed']} failed")
 
 
 @app.route("/")
@@ -99,12 +109,16 @@ def start_scrape():
         "files_found": 0,
         "discovered": 0,
         "errors": 0,
+        "files_downloaded": 0,
+        "files_failed": 0,
+        "download_progress": "",
         "extract_progress": "",
         "total_files": 0,
         "log": [],
         "report": None,
         "json_path": None,
         "html_path": None,
+        "files_dir": None,
     }
 
     t = threading.Thread(target=run_scrape, args=(task_id, url), daemon=True)
@@ -123,9 +137,12 @@ def get_status(task_id):
         "files_found": task["files_found"],
         "discovered": task["discovered"],
         "errors": task["errors"],
+        "files_downloaded": task["files_downloaded"],
+        "files_failed": task["files_failed"],
+        "download_progress": task["download_progress"],
         "extract_progress": task["extract_progress"],
         "total_files": task["total_files"],
-        "log": task["log"][-20:],
+        "log": task["log"][-30:],
         "has_report": task["report"] is not None,
     })
 
@@ -166,44 +183,29 @@ def download(task_id, fmt):
 @app.route("/download-all/<task_id>")
 def download_all(task_id):
     task = tasks.get(task_id)
-    if not task or not task["report"]:
-        return "Report not found", 404
+    if not task:
+        return "Task not found", 404
 
-    files_by_category = task["report"].get("files", {})
-    total = sum(len(v) for v in files_by_category.values())
-    if total == 0:
-        return jsonify({"error": "No files found"}), 404
+    files_dir = task.get("files_dir")
+    if not files_dir or not os.path.isdir(files_dir):
+        return jsonify({"error": "No downloaded files"}), 404
 
     zip_buffer = io.BytesIO()
-    downloaded = 0
-    failed = 0
-    visited = set()
+    total_added = 0
 
     with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
-        for category, file_list in files_by_category.items():
-            for f in file_list:
-                url = f["url"]
-                if url in visited:
-                    continue
-                visited.add(url)
-                try:
-                    resp = requests.get(url, timeout=15, headers={
-                        "User-Agent": "Mozilla/5.0"
-                    })
-                    if resp.status_code == 200:
-                        parsed = urlparse(url)
-                        path = parsed.path.lstrip("/")
-                        if not path:
-                            path = f"file_{downloaded}"
-                        zf.writestr(f"{category}/{path}", resp.content)
-                        downloaded += 1
-                    else:
-                        failed += 1
-                except Exception:
-                    failed += 1
+        for root, dirs, files in os.walk(files_dir):
+            for file in files:
+                file_path = os.path.join(root, file)
+                rel_path = os.path.relpath(file_path, files_dir)
+                zf.write(file_path, rel_path)
+                total_added += 1
+
+    if total_added == 0:
+        return jsonify({"error": "No files found"}), 404
 
     zip_buffer.seek(0)
-    domain = task["report"]["scrape_info"]["domain"]
+    domain = task.get("report", {}).get("scrape_info", {}).get("domain", "scrape")
     return send_file(
         zip_buffer,
         mimetype="application/zip",
