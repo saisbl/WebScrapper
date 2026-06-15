@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WebScraper Dashboard</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0f172a;color:#e2e8f0;min-height:100vh}
+.container{max-width:960px;margin:0 auto;padding:2rem}
+.header{text-align:center;margin-bottom:2rem}
+.header h1{font-size:2.2rem;background:linear-gradient(135deg,#38bdf8,#818cf8);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.header p{color:#64748b;margin-top:0.3rem}
+.card{background:#1e293b;border-radius:14px;padding:1.5rem;margin-bottom:1.5rem;box-shadow:0 4px 20px rgba(0,0,0,.3)}
+.input-group{display:flex;gap:.75rem}
+.input-group input{flex:1;padding:.85rem 1.1rem;border:1px solid #334155;border-radius:10px;background:#0f172a;color:#e2e8f0;font-size:1rem;outline:none}
+.input-group input:focus{border-color:#38bdf8}
+.input-group input::placeholder{color:#475569}
+.input-group button{padding:.85rem 2rem;border:none;border-radius:10px;background:linear-gradient(135deg,#38bdf8,#818cf8);color:#fff;font-size:1rem;font-weight:600;cursor:pointer;white-space:nowrap}
+.input-group button:hover{opacity:.9}
+.input-group button:disabled{opacity:.5;cursor:not-allowed}
+.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:.75rem;margin-bottom:1rem}
+.stat{background:#0f172a;border-radius:10px;padding:.8rem;text-align:center}
+.stat .val{font-size:1.4rem;font-weight:700;color:#38bdf8}
+.stat .lbl{font-size:.75rem;color:#64748b;margin-top:.2rem}
+.bar-track{height:6px;background:#0f172a;border-radius:3px;overflow:hidden;margin-bottom:.75rem}
+.bar-fill{height:100%;background:linear-gradient(90deg,#38bdf8,#818cf8);border-radius:3px;transition:width .3s;width:0}
+.log-box{background:#0f172a;border-radius:10px;padding:.75rem;max-height:160px;overflow-y:auto;font:12px/1.6 Consolas,monospace}
+.log-entry{color:#94a3b8;padding:1px 0}
+.log-scraped{color:#4ade80}
+.log-error{color:#f87171}
+.log-info{color:#94a3b8}
+#progressArea{display:none}
+#progressArea.show{display:block}
+#resultsArea{display:none}
+#resultsArea.show{display:block}
+.res-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem}
+.res-head h2{font-size:1.2rem}
+.btn-group{display:flex;gap:.5rem;flex-wrap:wrap}
+.btn{padding:.45rem 1rem;border:none;border-radius:8px;font-size:.82rem;font-weight:600;cursor:pointer;text-decoration:none;display:inline-block}
+.btn-view{background:#8b5cf6;color:#fff}
+.btn-json{background:#22c55e;color:#fff}
+.btn-html{background:#3b82f6;color:#fff}
+.btn-zip{background:#f59e0b;color:#1e293b}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+a.btn{text-decoration:none}
+.summary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:.75rem;margin-bottom:1rem}
+.summary-card{background:#0f172a;border-radius:10px;padding:.8rem;text-align:center}
+.summary-card .num{font-size:1.4rem;font-weight:700;color:#38bdf8}
+.summary-card .lbl{font-size:.78rem;color:#64748b}
+.pages-list{display:flex;flex-direction:column;gap:.4rem}
+.page-item{background:#0f172a;border-radius:8px;padding:.7rem 1rem;cursor:pointer}
+.page-item:hover{background:#1e293b}
+.page-item .title{font-weight:600;color:#f1f5f9}
+.page-item .url{font-size:.78rem;color:#64748b}
+.page-item .meta{font-size:.74rem;color:#475569;margin-top:.2rem}
+.toast{position:fixed;bottom:2rem;right:2rem;padding:.8rem 1.3rem;border-radius:10px;color:#fff;font-weight:600;transform:translateY(100px);opacity:0;transition:all .3s}
+.toast.show{transform:translateY(0);opacity:1}
+.toast.err{background:#ef4444}
+.toast.ok{background:#22c55e}
+@media(max-width:600px){.input-group{flex-direction:column}.stats-grid{grid-template-columns:repeat(2,1fr)}.res-head{flex-direction:column;gap:.5rem;align-items:flex-start}}
+</style>
+</head>
+<body>
+<div class=container>
+<div class=header>
+<h1>WebScraper</h1>
+<p>Enter a URL to scrape and extract all content</p>
+</div>
+
+<div class=card>
+<div class=input-group>
+<input type=url id=urlInput placeholder="https://example.com" autofocus>
+<button id=scrapeBtn onclick=startScrape()>Scrape</button>
+</div>
+</div>
+
+<div class=card id=progressArea>
+<div class=stats-grid>
+<div class=stat><div class=val id=sPages>0</div><div class=lbl>Pages</div></div>
+<div class=stat><div class=val id=sFiles>0</div><div class=lbl>Files</div></div>
+<div class=stat><div class=val id=sFound>0</div><div class=lbl>Discovered</div></div>
+<div class=stat><div class=val id=sErrors>0</div><div class=lbl>Errors</div></div>
+</div>
+<div class=bar-track><div class=bar-fill id=barFill></div></div>
+<div class=log-box id=logBox></div>
+</div>
+
+<div class=card id=resultsArea>
+<div class=res-head>
+<h2>Extraction Complete</h2>
+<div class=btn-group>
+<a class="btn btn-view" id=viewBtn target=_blank>View Report</a>
+<a class="btn btn-json" id=jsonBtn download>Download JSON</a>
+<a class="btn btn-html" id=htmlBtn download>Download HTML</a>
+<button class="btn btn-zip" id=zipBtn onclick=downloadAll() disabled>No Files</button>
+</div>
+</div>
+<div class=summary-grid id=summaryGrid></div>
+<h3 style="margin-bottom:.5rem;font-size:.95rem;color:#94a3b8">Pages</h3>
+<div class=pages-list id=pagesList></div>
+</div>
+</div>
+
+<div class=toast id=toast></div>
+
+<script>
+let tid=null, pollTimer=null
+
+function toast(msg,type){
+  const t=document.getElementById('toast')
+  t.textContent=msg;t.className='toast '+type+' show'
+  setTimeout(()=>t.classList.remove('show'),3500)
+}
+
+async function startScrape(){
+  const url=document.getElementById('urlInput').value.trim()
+  if(!url){toast('Enter a URL','err');return}
+  if(!url.match(/^https?:\/\//)) document.getElementById('urlInput').value='https://'+url
+
+  const btn=document.getElementById('scrapeBtn')
+  btn.disabled=true;btn.textContent='Scraping...'
+  document.getElementById('progressArea').className='card show'
+  document.getElementById('resultsArea').className='card'
+  resetStats();document.getElementById('logBox').innerHTML=''
+
+  try{
+    const r=await fetch('/scrape',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:document.getElementById('urlInput').value})})
+    const d=await r.json()
+    if(d.error){toast(d.error,'err');resetBtn();return}
+    tid=d.task_id;pollStatus()
+  }catch(e){toast('Failed to start','err');resetBtn()}
+}
+
+function resetStats(){
+  ['sPages','sFiles','sFound','sErrors'].forEach(id=>document.getElementById(id).textContent='0')
+  document.getElementById('barFill').style.width='0'
+}
+
+function pollStatus(){
+  if(!tid)return
+  fetch('/status/'+tid).then(r=>r.json()).then(d=>{
+    document.getElementById('sPages').textContent=d.pages_scraped
+    document.getElementById('sFiles').textContent=d.files_found
+    document.getElementById('sFound').textContent=d.discovered
+    document.getElementById('sErrors').textContent=d.errors
+
+    const log=document.getElementById('logBox')
+    d.log.forEach(line=>{
+      if(!log.querySelector(`[data-idx="${d.log.indexOf(line)}"]`)){
+        const el=document.createElement('div')
+        el.className='log-entry '+(line.startsWith('Error')?'log-error':line.startsWith('Scraped')?'log-scraped':'log-info')
+        el.textContent=line
+        log.appendChild(el)
+        log.scrollTop=log.scrollHeight
+      }
+    })
+
+    if(d.status==='done'){
+      clearTimeout(pollTimer)
+      document.getElementById('barFill').style.width='100%'
+      document.getElementById('scrapeBtn').disabled=false
+      document.getElementById('scrapeBtn').textContent='Scrape'
+      loadResults(tid)
+      return
+    }
+    if(d.status==='extracting'){
+      document.getElementById('barFill').style.width='80%'
+    }else if(d.status==='generating'){
+      document.getElementById('barFill').style.width='95%'
+    }else{
+      const pct=Math.min(70,Math.round(d.pages_scraped/(d.pages_scraped+1)*70))
+      document.getElementById('barFill').style.width=pct+'%'
+    }
+    pollTimer=setTimeout(pollStatus,1500)
+  }).catch(()=>{pollTimer=setTimeout(pollStatus,2000)})
+}
+
+async function loadResults(tid){
+  try{
+    const r=await fetch('/report-data/'+tid)
+    const rep=await r.json()
+    displayResults(rep)
+    document.getElementById('jsonBtn').href='/download/'+tid+'/json'
+    document.getElementById('htmlBtn').href='/download/'+tid+'/html'
+    document.getElementById('viewBtn').href='/report/'+tid
+    const total=rep.scrape_info.files_found
+    const btn=document.getElementById('zipBtn')
+    if(total>0){btn.textContent='Download All ('+total+')';btn.disabled=false}
+    else{btn.textContent='No Files';btn.disabled=true}
+  }catch(e){}
+}
+
+function displayResults(rep){
+  document.getElementById('resultsArea').className='card show'
+  const stats=rep.scrape_info,pages=rep.pages,files=rep.files||{}
+
+  const grid=document.getElementById('summaryGrid')
+  grid.innerHTML=''
+  const items=[
+    {l:'Pages',v:stats.pages_scraped},{l:'Files',v:stats.files_found},
+    {l:'Words',v:pages.reduce((s,p)=>s+(p.word_count||0),0).toLocaleString()},
+    {l:'Errors',v:stats.errors}
+  ]
+  items.forEach(i=>{
+    const c=document.createElement('div');c.className='summary-card'
+    c.innerHTML='<div class=num>'+i.v+'</div><div class=lbl>'+i.l+'</div>'
+    grid.appendChild(c)
+  })
+  const cats={documents:'Documents',images:'Images',media:'Media',archives:'Archives',other:'Other'}
+  Object.entries(cats).forEach(([k,l])=>{
+    if(files[k]&&files[k].length){
+      const c=document.createElement('div');c.className='summary-card'
+      c.innerHTML='<div class=num style=color:#facc15>'+files[k].length+'</div><div class=lbl>'+l+'</div>'
+      grid.appendChild(c)
+    }
+  })
+
+  const list=document.getElementById('pagesList')
+  list.innerHTML=''
+  pages.slice(0,100).forEach(p=>{
+    const el=document.createElement('div');el.className='page-item'
+    el.innerHTML='<div class=title>'+(p.metadata.title||'(no title)').slice(0,90)+'</div>'+
+      '<div class=url>'+p.url+'</div>'+
+      '<div class=meta>'+(p.word_count||0)+' words | '+((p.links&&p.links.total)||0)+' links | '+(p.images?p.images.length:0)+' images</div>'
+    el.onclick=()=>window.open('/report/'+tid,'_blank')
+    list.appendChild(el)
+  })
+  if(pages.length>100){
+    const m=document.createElement('div');m.className='page-item';m.style.textAlign='center';m.style.color='#64748b'
+    m.textContent='+ '+(pages.length-100)+' more pages'
+    m.onclick=()=>window.open('/report/'+tid,'_blank')
+    list.appendChild(m)
+  }
+}
+
+function downloadAll(){
+  const btn=document.getElementById('zipBtn')
+  btn.disabled=true;btn.textContent='Downloading...'
+  const a=document.createElement('a');a.href='/download-all/'+tid;a.download='files.zip'
+  document.body.appendChild(a);a.click();document.body.removeChild(a)
+  setTimeout(()=>{btn.disabled=false;btn.textContent='Download All'},2000)
+}
+
+function resetBtn(){
+  document.getElementById('scrapeBtn').disabled=false
+  document.getElementById('scrapeBtn').textContent='Scrape'
+}
+
+document.getElementById('urlInput').addEventListener('keydown',e=>{if(e.key==='Enter')startScrape()})
+</script>
+</body>
+</html>

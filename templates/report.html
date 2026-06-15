@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scrape Report - {{ stats.domain }}</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0f172a;
+            color: #e2e8f0;
+            line-height: 1.6;
+        }
+        .container { max-width: 1100px; margin: 0 auto; padding: 2rem; }
+
+        h1 { font-size: 2rem; color: #f8fafc; margin-bottom: 0.3rem; }
+        .subtitle { color: #64748b; margin-bottom: 2rem; }
+
+        .summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        .stat-card {
+            background: #1e293b;
+            border-radius: 12px;
+            padding: 1.25rem;
+            text-align: center;
+        }
+        .stat-card .number { font-size: 2rem; font-weight: 700; color: #38bdf8; }
+        .stat-card .label { font-size: 0.8rem; color: #94a3b8; margin-top: 0.3rem; }
+
+        h2 {
+            font-size: 1.4rem;
+            color: #94a3b8;
+            margin: 2rem 0 1rem;
+            border-bottom: 1px solid #334155;
+            padding-bottom: 0.5rem;
+        }
+
+        .file-section {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        .file-category {
+            background: #1e293b;
+            border-radius: 10px;
+            padding: 1rem;
+        }
+        .file-category h3 { color: #38bdf8; margin-bottom: 0.5rem; font-size: 1rem; }
+        .file-category ul { list-style: none; }
+        .file-category li {
+            font-size: 0.85rem;
+            color: #94a3b8;
+            padding: 0.2rem 0;
+            word-break: break-all;
+        }
+        .file-category a { color: #60a5fa; }
+
+        .page-card {
+            background: #1e293b;
+            border-radius: 12px;
+            margin-bottom: 1rem;
+            overflow: hidden;
+        }
+        .page-header {
+            padding: 1rem 1.25rem;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .page-header:hover { background: #334155; }
+        .page-header .info { flex: 1; }
+        .page-header h3 { font-size: 1.05rem; color: #f8fafc; }
+        .page-header .url { font-size: 0.78rem; color: #64748b; }
+        .page-header .badge {
+            font-size: 0.75rem;
+            color: #64748b;
+            white-space: nowrap;
+        }
+        .page-body { padding: 0 1.25rem 1.25rem; display: none; }
+        .page-body.open { display: block; }
+
+        .meta-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+        @media (max-width: 700px) { .meta-grid { grid-template-columns: 1fr; } }
+
+        .info-box {
+            background: #0f172a;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+        .info-box h4 { color: #38bdf8; font-size: 0.95rem; margin-bottom: 0.5rem; }
+        .info-box p, .info-box li { font-size: 0.85rem; color: #cbd5e1; }
+        .info-box ul { list-style: none; }
+        .info-box li { padding: 0.15rem 0; }
+        .info-box a { color: #60a5fa; }
+        .info-box .h-h1 { font-weight: 700; }
+        .info-box .h-h2 { padding-left: 1rem; font-weight: 600; }
+        .info-box .h-h3 { padding-left: 2rem; }
+
+        .text-preview {
+            max-height: 250px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            font-size: 0.85rem;
+            color: #94a3b8;
+            background: #0f172a;
+            padding: 1rem;
+            border-radius: 8px;
+        }
+
+        .error-list { background: #1e293b; border-radius: 12px; padding: 1.25rem; }
+        .error-list li { color: #f87171; margin-bottom: 0.4rem; font-size: 0.85rem; }
+
+        .loading { text-align: center; padding: 3rem; color: #64748b; }
+
+        @media (max-width: 600px) {
+            .container { padding: 1rem; }
+            .page-header { flex-direction: column; align-items: flex-start; gap: 0.3rem; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Scrape Report: {{ stats.domain }}</h1>
+        <p class="subtitle">Scraped at {{ stats.scraped_at }}</p>
+
+        <div class="summary">
+            <div class="stat-card"><div class="number">{{ stats.pages_scraped }}</div><div class="label">Pages</div></div>
+            <div class="stat-card"><div class="number">{{ stats.files_found }}</div><div class="label">Files</div></div>
+            <div class="stat-card"><div class="number">{{ pages|length }}</div><div class="label">Extracted Pages</div></div>
+            <div class="stat-card"><div class="number">{{ stats.errors }}</div><div class="label">Errors</div></div>
+        </div>
+
+        {% set has_files = false %}
+        {% for cat, items in files.items() %}
+            {% if items %}{% set has_files = true %}{% endif %}
+        {% endfor %}
+
+        {% if has_files %}
+        <h2>Files Found</h2>
+        <div class="file-section">
+            {% for category, items in files.items() %}
+                {% if items %}
+                <div class="file-category">
+                    <h3>{{ category|capitalize }} ({{ items|length }})</h3>
+                    <ul>
+                        {% for f in items[:30] %}
+                        <li><a href="{{ f.url }}" target="_blank">[{{ f.type }}] {{ f.url.split('/')[-1][:50] }}</a></li>
+                        {% endfor %}
+                        {% if items|length > 30 %}<li>...and {{ items|length - 30 }} more</li>{% endif %}
+                    </ul>
+                </div>
+                {% endif %}
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <h2>Pages ({{ pages|length }})</h2>
+        {% for page in pages %}
+        <div class="page-card">
+            <div class="page-header" onclick="this.nextElementSibling.classList.toggle('open')">
+                <div class="info">
+                    <h3>{{ page.metadata.title[:80] or '(no title)' }}</h3>
+                    <span class="url">{{ page.url }}</span>
+                </div>
+                <span class="badge">{{ page.word_count }} words | {{ page.links.total if page.links else 0 }} links</span>
+            </div>
+            <div class="page-body">
+                <div class="meta-grid">
+                    <div class="info-box">
+                        <h4>Metadata</h4>
+                        <p><strong>Title:</strong> {{ page.metadata.title or 'N/A' }}</p>
+                        <p><strong>Description:</strong> {{ page.metadata.description[:200] or 'N/A' }}</p>
+                        <p><strong>Keywords:</strong> {{ page.metadata.keywords or 'N/A' }}</p>
+                        <p><strong>Language:</strong> {{ page.metadata.language or 'N/A' }}</p>
+                    </div>
+                    <div class="info-box">
+                        <h4>Headings</h4>
+                        <ul>
+                            {% for h in page.headings %}
+                            <li class="h-{{ h.level }}">{{ h.level|upper }}: {{ h.text[:80] }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="info-box">
+                    <h4>Text Preview ({{ page.word_count }} words)</h4>
+                    <div class="text-preview">{{ page.structured_text[:2000] }}{% if page.structured_text|length > 2000 %}...{% endif %}</div>
+                </div>
+
+                <div class="meta-grid">
+                    <div class="info-box">
+                        <h4>Links ({{ page.links.total if page.links else 0 }})</h4>
+                        <p>Internal: {{ page.links.internal|length if page.links else 0 }}</p>
+                        <p>External: {{ page.links.external|length if page.links else 0 }}</p>
+                    </div>
+                    <div class="info-box">
+                        <h4>Images ({{ page.images|length }})</h4>
+                        {% for img in page.images[:5] %}
+                        <p><img src="{{ img.src }}" alt="{{ img.alt }}" style="max-width:80px;max-height:80px;vertical-align:middle"/> {{ img.alt[:40] }}</p>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                {% if page.documents %}
+                <div class="info-box">
+                    <h4>Documents ({{ page.documents|length }})</h4>
+                    <ul>
+                        {% for d in page.documents %}
+                        <li><a href="{{ d.url }}" target="_blank">{{ d.text }} ({{ d.type }})</a></li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+
+                {% if page.tables %}
+                <div class="info-box">
+                    <h4>Tables ({{ page.tables|length }})</h4>
+                    {% for t in page.tables %}
+                    <p>Table with {{ t.row_count }} rows</p>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+
+        {% if errors %}
+        <h2>Errors ({{ errors|length }})</h2>
+        <div class="error-list">
+            <ul>
+                {% for err in errors %}
+                <li><strong>{{ err.url }}</strong>: {{ err.error }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+    </div>
+</body>
+</html>
